@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIT AI Attendance Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f0f0f; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+        .card { background-color: #1a1a1a; border: 1px solid #333; color: white; border-radius: 15px; }
+        .video-box { border: 4px solid #00ff00; border-radius: 10px; overflow: hidden; position: relative; background-color: #000; }
+        video { width: 100%; transform: scaleX(-1); } /* Mirror effect */
+        .text-success-custom { color: #00ff00; }
+        .status-dot { height: 10px; width: 10px; background-color: #00ff00; border-radius: 50%; display: inline-block; margin-right: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container p-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-7 d-flex align-items-center">
+            <h1 class="fw-bold mb-0">AI <span class="text-success-custom">Attendance</span></h1>
+            <div class="ms-4">
+                <p class="mb-0"><span class="status-dot"></span> Status: <span class="text-success-custom">SYSTEM ONLINE</span></p>
+            </div>
+        </div>
+        <div class="col-md-5 text-end">
+            <a href="/register_student" class="btn btn-outline-success">Register User</a>
+            <a href="/view_attendance" class="btn btn-outline-info">Logs</a>
+            <a href="/download_attendance" class="btn btn-primary">Report</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card p-3 shadow">
+                <h4 class="mb-3">Live Scanner (Remote Camera)</h4>
+                <div class="video-box">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" style="display:none;"></canvas>
+                </div>
+                <p id="detection-status" class="mt-2 text-center text-warning">Initializing Camera...</p>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card p-3 shadow h-100">
+                <h4 class="mb-3">Recent Logs (Cloud)</h4>
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr><th>Name</th><th>Time</th></tr>
+                        </thead>
+                        <tbody id="log-table-body">
+                            {% for row in logs %}
+                            <tr><td>{{ row[0] }}</td><td>{{ row[2] }}</td></tr>
+                            {% else %}
+                            <tr><td colspan="2" class="text-center">No logs yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const statusText = document.getElementById('detection-status');
+
+    // 1. ካሜራ ምጅማር
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+        .then(stream => { video.srcObject = stream; })
+        .catch(err => { statusText.innerText = "Camera Error: " + err; });
+
+    // 2. በብ 2 ሰኮንዱ ስእሊ ናብ Server ምስዳድ
+    setInterval(() => {
+        if (video.videoWidth === 0) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const dataURL = canvas.toDataURL('image/jpeg', 0.5);
+
+        fetch('/process_frame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: dataURL })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.name !== "Unknown") {
+                statusText.innerText = "✅ Detected: " + data.name;
+                statusText.className = "mt-2 text-center text-success-custom fw-bold";
+            } else {
+                statusText.innerText = "🔍 Scanning for faces...";
+                statusText.className = "mt-2 text-center text-warning";
+            }
+        });
+    }, 2000);
+
+    // 3. ነቲ Table በብ 10 ሰኮንዱ Update ንምግባር
+    setInterval(() => {
+        location.reload(); 
+    }, 15000);
+</script>
+
+</body>
+</html>
